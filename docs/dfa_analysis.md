@@ -1,25 +1,26 @@
-# DFA: Def-Use Analysis
+# Анализ потоков данных (DFA)
 
-The line numbers below refer to the original `process_transaction` fragment in
-Practice 7, not the fixed implementation.
+Номера строк ниже относятся к исходному фрагменту `process_transaction` из
+практического задания, а не к исправленной версии функции.
 
-| Variable | Definition (def) | Use (use) | Data-flow notes |
+| Переменная | Определение (def) | Использование (use) | Примечания к потоку данных |
 | --- | --- | --- | --- |
-| `user_id` | Function parameter, line 1 | Lines 6 and 8 | Used to read and update the user's balance. |
-| `amount` | Function parameter, line 1 | Line 4 | Controls whether the transaction block executes. |
-| `db_connection` | Function parameter, line 1 | None | The provided fragment does not use this parameter. |
-| `log_entry` | Line 2, then redefined on line 10 | Line 13 | The value from line 2 is overwritten before it is read (dead store). |
-| `status` | Line 5, only if `amount > 0` | Lines 10 and 15 | If `amount <= 0`, it is read without being defined, raising `UnboundLocalError`. |
-| `balance` | Line 6, only if `amount > 0` | Line 7 | The read on line 7 follows its definition within the same branch. |
-| `new_balance` | Line 7, only if `amount > 0` | Line 8 | The value is passed to `update_balance`. |
-| `file` | Line 12 | Line 13 | The file is written but never explicitly closed. |
+| `user_id` | Параметр функции, строка 1 | Строки 6 и 8 | Используется для чтения и обновления баланса пользователя. |
+| `amount` | Параметр функции, строка 1 | Строка 4 | Определяет, будет ли выполнен блок обработки транзакции. |
+| `db_connection` | Параметр функции, строка 1 | Нет | В исходном фрагменте параметр не используется. |
+| `log_entry` | Строка 2, повторное определение в строке 10 | Строка 13 | Значение из строки 2 перезаписывается до чтения (мёртвое присваивание). |
+| `status` | Строка 5, только если `amount > 0` | Строки 10 и 15 | При `amount <= 0` переменная читается до определения, возникает `UnboundLocalError`. |
+| `balance` | Строка 6, только если `amount > 0` | Строка 7 | Чтение происходит после определения в той же ветке. |
+| `new_balance` | Строка 7, только если `amount > 0` | Строка 8 | Значение передаётся в `update_balance`. |
+| `file` | Строка 12 | Строка 13 | Файл используется для записи, но явно не закрывается. |
 
-## Defects found
+## Найденные дефекты
 
-1. **Uninitialized variable:** `status` is assigned only inside `if amount > 0`
-   (line 5) but read on line 10 and returned on line 15. For `amount <= 0`,
-   Python raises `UnboundLocalError`.
-2. **Dead store:** the initial value assigned to `log_entry` on line 2 is
-   overwritten on line 10 before any read.
-3. **Resource leak:** line 12 opens `audit_log.txt`, and line 13 writes to it,
-   but the fragment never closes the file. A context manager ensures closure.
+1. **Неинициализированная переменная:** `status` получает значение только в
+   ветке `if amount > 0` (строка 5), но читается на строке 10 и возвращается
+   на строке 15. При `amount <= 0` Python вызывает `UnboundLocalError`.
+2. **Мёртвое присваивание:** первоначальное значение `log_entry` в строке 2
+   перезаписывается в строке 10 до чтения.
+3. **Утечка ресурса:** в строке 12 открывается `audit_log.txt`, а в строке 13
+   выполняется запись, но файл не закрывается. Контекстный менеджер
+   гарантирует его закрытие.

@@ -1,14 +1,15 @@
-# Disassembly Analysis
+# Анализ дизассемблированного кода
 
-The first stack slot (`-4(%rbp)`) is initialized as an accumulator with zero.
-The second (`-8(%rbp)`) is initialized as a counter with one. The unconditional
-`jmp .L2` enters the condition check before the loop body. The comparison and
-`jle .L3` repeat the body while the counter is less than or equal to 10.
+Первая ячейка стека (`-4(%rbp)`) используется как аккумулятор и получает
+начальное значение 0. Вторая ячейка (`-8(%rbp)`) используется как счётчик,
+начинающийся с 1. Безусловный переход `jmp .L2` сначала направляет выполнение
+к проверке условия цикла. Сравнение и переход `jle .L3` повторяют тело цикла,
+пока счётчик меньше или равен 10.
 
-The body adds the counter to the accumulator and increments the counter. After
-the counter becomes 11, execution leaves the loop and places the accumulated
-sum in `%eax`. The function therefore calculates the sum of integers 1 through
-10, which is 55.
+В теле цикла значение счётчика прибавляется к аккумулятору, после чего счётчик
+увеличивается. Когда он становится равен 11, цикл завершается, а сумма
+помещается в регистр `%eax`. Таким образом, функция вычисляет сумму целых
+чисел от 1 до 10, равную 55.
 
 ```python
 def sum_one_to_ten():

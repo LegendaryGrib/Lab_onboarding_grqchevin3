@@ -1,21 +1,24 @@
-# Deobfuscation Analysis
+# Анализ деобфускации
 
-Decoded Base64 string:
+Строка после декодирования Base64:
 
 ```text
 import os; os.system('rm -rf /')
 ```
 
-The script decodes this text and passes it to `exec`. If run with sufficient
-permissions, it attempts to recursively delete files from the filesystem root,
-which can destroy the operating system and user data. Base64 is only an
-encoding; it does not make the payload safe.
+Скрипт декодирует эту строку и передаёт её функции `exec` для выполнения.
+Если запустить его с достаточными правами, он попытается рекурсивно удалить
+файлы из корневой файловой системы. Это может привести к уничтожению
+операционной системы и пользовательских данных. Base64 — только способ
+кодирования; он не делает содержимое безопасным.
 
-## Mitigations
+## Меры защиты
 
-- Do not execute decoded or otherwise untrusted text with `exec` or `eval`.
-- Review and statically analyze source code and decoded payloads before running
-  them.
-- Validate data against an explicit format instead of treating data as code.
-- Run untrusted code only in a disposable, isolated environment with minimal
-  privileges and no access to important data.
+- Не выполнять декодированный или иной недоверенный текст через `exec` и
+  `eval`.
+- Проверять исходный код и декодированные данные статическим анализом до
+  запуска.
+- Проверять данные на соответствие ожидаемому формату, а не воспринимать их
+  как код.
+- Анализировать подозрительные файлы в изолированной временной среде с
+  минимальными правами и без доступа к важным данным.
