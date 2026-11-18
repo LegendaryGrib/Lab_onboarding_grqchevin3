@@ -5,6 +5,10 @@ setlocal EnableExtensions DisableDelayedExpansion
 set "REPORT=%~dp0pc_report.txt"
 set "APPS_FILE=%TEMP%\pc_apps_%RANDOM%.txt"
 set "MATCH_FILE=%TEMP%\pc_matches_%RANDOM%.txt"
+set "INFO_FILE=%TEMP%\pc_info_%RANDOM%.txt"
+set "PS_INFO=%TEMP%\pc_ps_info_%RANDOM%.ps1"
+set "PS_APPS=%TEMP%\pc_ps_apps_%RANDOM%.ps1"
+set "PS_FIND=%TEMP%\pc_ps_find_%RANDOM%.ps1"
 set "POWERSHELL=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 set "APPS_READY=0"
 set "BASIC_COUNT=0"
@@ -17,81 +21,96 @@ if not exist "%POWERSHELL%" (
     exit /b 1
 )
 
+:: ---- PS: сведения о системе ----
+>"%PS_INFO%" echo $os = Get-CimInstance Win32_OperatingSystem
+>>"%PS_INFO%" echo $cpu = Get-CimInstance Win32_Processor
+>>"%PS_INFO%" echo $cpu = $cpu ^| Select-Object -First 1
+>>"%PS_INFO%" echo $d = Get-CimInstance Win32_LogicalDisk
+>>"%PS_INFO%" echo $d = $d ^| ? { $_.DeviceID -eq 'C:' }
+>>"%PS_INFO%" echo "OS_NAME=$($os.Caption)"
+>>"%PS_INFO%" echo "OS_VER=$($os.Version)"
+>>"%PS_INFO%" echo "CPU=$($cpu.Name)"
+>>"%PS_INFO%" echo "RAM_TOTAL=$([math]::Round($os.TotalVisibleMemorySize/1MB,1))"
+>>"%PS_INFO%" echo "RAM_FREE=$([math]::Round($os.FreePhysicalMemory/1MB,1))"
+>>"%PS_INFO%" echo "DISK_SIZE=$([math]::Round($d.Size/1GB,1))"
+>>"%PS_INFO%" echo "DISK_FREE=$([math]::Round($d.FreeSpace/1GB,1))"
+
+:: ---- PS: список программ ----
+>"%PS_APPS%" echo $ErrorActionPreference = 'SilentlyContinue'
+>>"%PS_APPS%" echo $r = @()
+>>"%PS_APPS%" echo $r += 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+>>"%PS_APPS%" echo $r += 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+>>"%PS_APPS%" echo $a = Get-ItemProperty (Join-Path $r '*')
+>>"%PS_APPS%" echo $a = $a ^| ? { $_.DisplayName -and $_.SystemComponent -ne 1 }
+>>"%PS_APPS%" echo $n = @($a.DisplayName ^| Sort-Object -Unique)
+>>"%PS_APPS%" echo if ($n.Count -eq 0) { $n = @('') }
+>>"%PS_APPS%" echo $n ^| Set-Content $env:APPS_FILE -Encoding UTF8
+
+:: ---- PS: поиск совпадений ----
+>"%PS_FIND%" echo $ErrorActionPreference = 'SilentlyContinue'
+>>"%PS_FIND%" echo $p = $env:APP_PATTERN
+>>"%PS_FIND%" echo $a = Get-Content $env:APPS_FILE -EA 0
+>>"%PS_FIND%" echo $m = @($a ^| ? { $_ -match $p })
+>>"%PS_FIND%" echo if ($m.Count -gt 0) { $m ^| Set-Content $env:MATCH_FILE -Encoding UTF8 }
+
 call :log "Диагностика компьютера"
 call :log "Время формирования: %date% %time%"
 call :log "Сбор сведений о системе"
 
-set "OS_NAME="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "(Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).Caption" 2^>nul') do set "OS_NAME=%%A"
-if defined OS_NAME (call :log "Операционная система: %OS_NAME%") else (call :log "Не удалось получить название операционной системы.")
+"%POWERSHELL%" -NoP -EP Bypass -File "%PS_INFO%" >"%INFO_FILE%" 2>nul
+for /f "usebackq tokens=1,* delims==" %%A in ("%INFO_FILE%") do set "S_%%A=%%B"
 
-set "OS_VERSION="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "(Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).Version" 2^>nul') do set "OS_VERSION=%%A"
-if defined OS_VERSION (call :log "Версия: %OS_VERSION%") else (call :log "Не удалось получить версию Windows.")
-
-set "CPU_NAME="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "(Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop)[0].Name" 2^>nul') do set "CPU_NAME=%%A"
-if defined CPU_NAME (call :log "Процессор: %CPU_NAME%") else (call :log "Не удалось получить сведения о процессоре.")
-
-set "TOTAL_MEMORY="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$os=Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop; [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)" 2^>nul') do set "TOTAL_MEMORY=%%A"
-if defined TOTAL_MEMORY (call :log "Всего памяти: %TOTAL_MEMORY% ГБ") else (call :log "Не удалось получить общий объём памяти.")
-
-set "FREE_MEMORY="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$os=Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop; [math]::Round($os.FreePhysicalMemory / 1MB, 1)" 2^>nul') do set "FREE_MEMORY=%%A"
-if defined FREE_MEMORY (call :log "Свободно памяти: %FREE_MEMORY% ГБ") else (call :log "Не удалось получить свободный объём памяти.")
-
-set "DISK_SIZE="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$disk=Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object {$_.DeviceID -eq ([string][char]67+[char]58)} | Select-Object -First 1; [math]::Round($disk.Size / 1GB, 1)" 2^>nul') do set "DISK_SIZE=%%A"
-if defined DISK_SIZE (call :log "Общий объём диска C: %DISK_SIZE% ГБ") else (call :log "Не удалось получить общий объём диска C.")
-
-set "DISK_FREE="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$disk=Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object {$_.DeviceID -eq ([string][char]67+[char]58)} | Select-Object -First 1; [math]::Round($disk.FreeSpace / 1GB, 1)" 2^>nul') do set "DISK_FREE=%%A"
-if defined DISK_FREE (call :log "Свободно на диске C: %DISK_FREE% ГБ") else (call :log "Не удалось получить свободное место на диске C.")
+if defined S_OS_NAME (call :log "ОС: %S_OS_NAME%") else (call :log "ОС не определена.")
+if defined S_OS_VER  (call :log "Версия: %S_OS_VER%") else (call :log "Версия не определена.")
+if defined S_CPU     (call :log "Процессор: %S_CPU%") else (call :log "Процессор не определён.")
+if defined S_RAM_TOTAL (call :log "Всего памяти: %S_RAM_TOTAL% ГБ") else (call :log "ОЗУ не определено.")
+if defined S_RAM_FREE  (call :log "Свободно памяти: %S_RAM_FREE% ГБ") else (call :log "Свободно ОЗУ неизвестно.")
+if defined S_DISK_SIZE (call :log "Диск C всего: %S_DISK_SIZE% ГБ") else (call :log "Объём C: неизвестен.")
+if defined S_DISK_FREE (call :log "Диск C свободно: %S_DISK_FREE% ГБ") else (call :log "Свободно на C: неизвестно.")
 
 call :log "Сбор списка установленных программ"
-"%POWERSHELL%" -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $roots=@('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall','HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'); $apps=foreach($root in $roots){Get-ItemProperty -Path (Join-Path $root '*') -ErrorAction SilentlyContinue}; $names=@($apps | Where-Object {$_.DisplayName -and $_.SystemComponent -ne 1} | Select-Object -ExpandProperty DisplayName | Sort-Object -Unique); if($names.Count -eq 0){$names=@('')}; Set-Content -LiteralPath $env:APPS_FILE -Value $names -Encoding UTF8" >nul 2>nul
+"%POWERSHELL%" -NoP -EP Bypass -File "%PS_APPS%" >nul 2>nul
 if errorlevel 1 (
-    call :log "Не удалось прочитать список программ из реестра."
+    call :log "Не удалось прочитать список программ."
 ) else (
     set "APPS_READY=1"
     call :log "Список программ подготовлен."
 )
 
 call :log "Проверка базового офисного ПО"
-call :check "Офисный пакет найден:" "Office|LibreOffice|OpenOffice|МойОфис" "Не обнаружен офисный пакет. Проверьте Office, LibreOffice или МойОфис."
-call :check "Браузер найден:" "Chrome|Firefox|Edge|Яндекс" "Не обнаружен браузер. Рекомендуется установить Chrome, Firefox или другой браузер организации."
-call :log "Edge является компонентом Windows, его наличие не подтверждает настройку рабочего места."
-call :check "Программа для PDF найдена:" "Acrobat|Foxit|SumatraPDF" "Не обнаружена программа для PDF. Рекомендуется установить Acrobat, Foxit или SumatraPDF."
-call :check "Архиватор найден:" "7-Zip|WinRAR|WinZip" "Не обнаружен архиватор. Для работы с вложениями рекомендуется установить 7-Zip или WinRAR."
-call :check "Антивирус найден:" "Defender|Kaspersky|ESET|Dr\.Web" "Не обнаружен антивирус. Проверьте защиту компьютера и настройки организации."
+call :check "Офисный пакет найден:" "Office|LibreOffice|OpenOffice|МойОфис" "Офисный пакет не обнаружен."
+call :check "Браузер найден:" "Chrome|Firefox|Edge|Яндекс" "Браузер не обнаружен."
+call :log "Edge является компонентом Windows."
+call :check "PDF-программа найдена:" "Acrobat|Foxit|SumatraPDF" "PDF-программа не обнаружена."
+call :check "Архиватор найден:" "7-Zip|WinRAR|WinZip" "Архиватор не обнаружен."
+call :check "Антивирус найден:" "Defender|Kaspersky|ESET|Dr\.Web" "Антивирус не обнаружен."
 
-call :log "Проверка программ, не относящихся к базовым офисным задачам"
-call :review "Игровое ПО найдено, проверьте необходимость:" "Steam|Epic Games|GOG|Origin|Ubisoft Connect|Battle\.net|Riot|game|gaming" "Игровое ПО не найдено."
-call :review "Найдены торрент-клиенты или файлообменные программы, проверьте необходимость:" "torrent|uTorrent|BitTorrent|qBittorrent|Vuze" "Торрент-клиенты и файлообменные программы не найдены."
-call :review "Найдены мессенджеры, проверьте соответствие корпоративному стандарту:" "Discord|Telegram|WhatsApp|Viber|Skype" "Мессенджеры из списка проверки не найдены."
-call :review "Найдены программы для развлечений или оформления, проверьте необходимость:" "Wallpaper Engine|OBS|Soundpad|VLC|Media Player|KMPlayer|PotPlayer" "Программы для развлечений и оформления из списка не найдены."
+call :log "Проверка прочих программ"
+call :review "Игровое ПО найдено:" "Steam|Epic Games|GOG|Origin|Ubisoft Connect|Battle\.net|Riot|game|gaming" "Игровое ПО не найдено."
+call :review "Торрент-клиенты найдены:" "torrent|uTorrent|BitTorrent|qBittorrent|Vuze" "Торрент-клиенты не найдены."
+call :review "Мессенджеры найдены:" "Discord|Telegram|WhatsApp|Viber|Skype" "Мессенджеры не найдены."
+call :review "Развлечения найдены:" "Wallpaper Engine|OBS|Soundpad|VLC|KMPlayer|PotPlayer" "Развлечения не найдены."
 
-call :log "Результат является рекомендацией к проверке, а не указанием к удалению. Решение принимает администратор."
-call :log "Проверено категорий базового ПО: %BASIC_COUNT%"
-call :log "Рекомендаций для проверки: %RECOMMENDATIONS%"
-call :log "Отчёт сохранён: %REPORT%"
+call :log "Результат — рекомендация к проверке."
+call :log "Проверено категорий: %BASIC_COUNT%"
+call :log "Рекомендаций: %RECOMMENDATIONS%"
+call :log "Отчёт: %REPORT%"
 
-del /q "%APPS_FILE%" "%MATCH_FILE%" >nul 2>nul
+del /q "%APPS_FILE%" "%MATCH_FILE%" "%INFO_FILE%" "%PS_INFO%" "%PS_APPS%" "%PS_FIND%" >nul 2>nul
 pause
 exit /b 0
 
 :check
 set /a BASIC_COUNT+=1
 if not "%APPS_READY%"=="1" (
-    call :log "Не удалось проверить категорию: список программ недоступен."
+    call :log "Категория не проверена: список недоступен."
     set /a RECOMMENDATIONS+=1
     exit /b
 )
 set "APP_PATTERN=%~2"
 call :find
 if errorlevel 1 (
-    call :log "Не удалось выполнить проверку базового ПО."
+    call :log "Проверка не выполнена."
     set /a RECOMMENDATIONS+=1
     exit /b
 )
@@ -107,14 +126,14 @@ exit /b
 
 :review
 if not "%APPS_READY%"=="1" (
-    call :log "Не удалось выполнить проверку: список программ недоступен."
+    call :log "Категория не проверена: список недоступен."
     set /a RECOMMENDATIONS+=1
     exit /b
 )
 set "APP_PATTERN=%~2"
 call :find
 if errorlevel 1 (
-    call :log "Не удалось выполнить поиск по списку программ."
+    call :log "Поиск не выполнен."
     set /a RECOMMENDATIONS+=1
     exit /b
 )
@@ -131,7 +150,7 @@ exit /b
 :find
 del /q "%MATCH_FILE%" >nul 2>nul
 if not exist "%APPS_FILE%" exit /b 1
-"%POWERSHELL%" -NoProfile -NonInteractive -Command "$apps=Get-Content -LiteralPath $env:APPS_FILE -Encoding UTF8; $found=@($apps | Where-Object { $_ -match $env:APP_PATTERN }); if($found.Count -gt 0){ Set-Content -LiteralPath $env:MATCH_FILE -Value $found -Encoding UTF8 }" >nul 2>nul
+"%POWERSHELL%" -NoP -EP Bypass -File "%PS_FIND%" >nul 2>nul
 if errorlevel 1 exit /b 1
 exit /b 0
 
