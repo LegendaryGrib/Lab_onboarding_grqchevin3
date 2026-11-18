@@ -130,8 +130,10 @@ exit /b
 
 :find
 del /q "%MATCH_FILE%" >nul 2>nul
-"%POWERSHELL%" -NoProfile -NonInteractive -Command "$apps=Get-Content -LiteralPath $env:APPS_FILE; $matches=@($apps | Where-Object {$_ -match $env:APP_PATTERN}); if($matches.Count -gt 0){Set-Content -LiteralPath $env:MATCH_FILE -Value $matches -Encoding UTF8}" >nul 2>nul
-exit /b %errorlevel%
+if not exist "%APPS_FILE%" exit /b 1
+"%POWERSHELL%" -NoProfile -NonInteractive -Command "$apps=Get-Content -LiteralPath $env:APPS_FILE -Encoding UTF8; $found=@($apps | Where-Object { $_ -match $env:APP_PATTERN }); if($found.Count -gt 0){ Set-Content -LiteralPath $env:MATCH_FILE -Value $found -Encoding UTF8 }" >nul 2>nul
+if errorlevel 1 exit /b 1
+exit /b 0
 
 :log
 set "LOG_MESSAGE=%~1"
