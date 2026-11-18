@@ -42,11 +42,11 @@ for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$o
 if defined FREE_MEMORY (call :log "Свободно памяти: %FREE_MEMORY% ГБ") else (call :log "Не удалось получить свободный объём памяти.")
 
 set "DISK_SIZE="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$disk=Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DeviceID=''C:''' -ErrorAction Stop; [math]::Round($disk.Size / 1GB, 1)" 2^>nul') do set "DISK_SIZE=%%A"
+for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$disk=Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object {$_.DeviceID -eq ([string][char]67+[char]58)} | Select-Object -First 1; [math]::Round($disk.Size / 1GB, 1)" 2^>nul') do set "DISK_SIZE=%%A"
 if defined DISK_SIZE (call :log "Общий объём диска C: %DISK_SIZE% ГБ") else (call :log "Не удалось получить общий объём диска C.")
 
 set "DISK_FREE="
-for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$disk=Get-CimInstance -ClassName Win32_LogicalDisk -Filter 'DeviceID=''C:''' -ErrorAction Stop; [math]::Round($disk.FreeSpace / 1GB, 1)" 2^>nul') do set "DISK_FREE=%%A"
+for /f "delims=" %%A in ('"%POWERSHELL%" -NoProfile -NonInteractive -Command "$disk=Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object {$_.DeviceID -eq ([string][char]67+[char]58)} | Select-Object -First 1; [math]::Round($disk.FreeSpace / 1GB, 1)" 2^>nul') do set "DISK_FREE=%%A"
 if defined DISK_FREE (call :log "Свободно на диске C: %DISK_FREE% ГБ") else (call :log "Не удалось получить свободное место на диске C.")
 
 call :log "Сбор списка установленных программ"
